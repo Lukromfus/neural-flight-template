@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Binocular Rivalry Test</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: monospace; background: #000; }
+    #roll-display {
+      position: fixed; bottom: 40px; left: 50%;
+      transform: translateX(-50%);
+      color: #fff; font-size: 24px; z-index: 10;
+      background: rgba(0,0,0,0.7); padding: 8px 20px;
+      border-radius: 8px; pointer-events: none;
+      text-align: center;
+    }
+    #status {
+      position: fixed; top: 40px; left: 50%;
+      transform: translateX(-50%);
+      color: #ff0; font-size: 28px; z-index: 10;
+      background: rgba(0,0,0,0.7); padding: 12px 24px;
+      border-radius: 8px; pointer-events: none;
+      text-align: center; white-space: pre-line;
+    }
+    #instructions {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: #aaa; font-size: 18px; z-index: 10;
+      background: rgba(0,0,0,0.85); padding: 20px 32px;
+      border-radius: 12px; pointer-events: none;
+      text-align: center; line-height: 1.6;
+      border: 1px solid #444;
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="instructions">
+    Put on your headset.<br>
+    Two shapes overlap — you'll see only one.<br>
+    <b>Tilt your head left</b> to keep the Circle.<br>
+    <b>Tilt your head right</b> to keep the Triangle.
+  </div>
+  <div id="status" class="hidden"></div>
+  <div id="roll-display">Roll: 0.00</div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

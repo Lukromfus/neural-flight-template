@@ -302,11 +302,19 @@ export interface B5LesserState extends ExperienceState {
 	leanStartTime: number;
 	exitLight: THREE.PointLight;
 	exitGlow: THREE.Mesh;
+	rivalryActive: boolean;
+	rivalryLocked: boolean;
+	rivalryChoice: "left" | "right" | "";
+	rivalryDist: number;
+	debugCanvas: HTMLCanvasElement;
+	debugTexture: THREE.CanvasTexture;
+	debugOverlay: THREE.Sprite;
 }
 
 const TUNNEL_R = 6.4; const TUNNEL_LEN = 320; const CAGE_R = 16; const CAGE_LEN = 400; const GP_N = 850;
 const CANAL_RADIUS = 3.5; const CANAL_LENGTH = 700; const CANAL_NEAR = 10; const CANAL_FAR = 10 - CANAL_LENGTH;
 const CANAL_RAD_SEG = 32; const CANAL_Z_SEG = 100;
+const RIVALRY_START = 150;
 
 export async function setup(ctx: SetupContext): Promise<B5LesserState> {
 	const { scene, renderer } = ctx;
@@ -574,6 +582,15 @@ export async function setup(ctx: SetupContext): Promise<B5LesserState> {
 	exitGlow.visible = false;
 	scene.add(exitGlow);
 
+	const debugCanvas = document.createElement("canvas");
+	debugCanvas.width = 512; debugCanvas.height = 256;
+	debugCanvas.getContext("2d")!.fillStyle = "#ffffff";
+	const debugTexture = new THREE.CanvasTexture(debugCanvas);
+	const debugOverlay = new THREE.Sprite(new THREE.SpriteMaterial({ map: debugTexture, transparent: true, depthWrite: false, depthTest: false }));
+	debugOverlay.position.set(-4, 3, -6);
+	debugOverlay.scale.set(8, 4, 1);
+	scene.add(debugOverlay);
+
 	const state: B5LesserState = {
 		scene, renderer, camera, phase: 0, phaseT: 0, camZ: -2, camPos: new THREE.Vector3(0, 0, -2), heading: 0, lateralX: 0, currentSpeed: 0,
 		delayedPitch: 0, delayedRoll: 0, tunnelSpeed: 0.28, baseSpeed: 5, phaseDuration: 35, bendSpeed: 0.005,
@@ -585,12 +602,29 @@ export async function setup(ctx: SetupContext): Promise<B5LesserState> {
 		canalMesh, canalMat, canalScrollOffset: 0,
 		circleSymbol, triangleSymbol, circleGlowU, triangleGlowU, closedDoor, openDoor,
 		cageMesh, cageU, stars, nebula, trails, trailSc: 1, gpMesh, gpGeo, gpSamp, threats, threatGlowU, _onResize, startScreen, leanStartTime: 0, exitLight, exitGlow,
+		rivalryActive: false, rivalryLocked: false, rivalryChoice: "", rivalryDist: 0, debugCanvas, debugTexture, debugOverlay,
 	};
+
+	applyPhase(state, 1);
 
 	keyHandler = (e: KeyboardEvent): void => {
 		const k = e.key;
 		const num = k.length === 1 ? parseInt(k) : parseInt(k.replace("Numpad", ""));
 		if (!isNaN(num) && num >= 0 && num <= 5) applyPhase(state, num);
+		if (k === "r" || k === "R") {
+			applyPhase(state, 1);
+			state.canalScrollOffset = CANAL_FAR + RIVALRY_START - 20;
+		}
+		if (k === "y" || k === "Y") {
+			// Force-show rivalry symbols for testing
+			const S = state as B5LesserState;
+			if (S.phase === 1) {
+				S.rivalryActive = true;
+				S.rivalryLocked = false;
+				S.circleSymbol.visible = true;
+				S.triangleSymbol.visible = true;
+			}
+		}
 	};
 	document.addEventListener("keydown", keyHandler);
 
@@ -602,12 +636,15 @@ export function applyPhase(s: B5LesserState, phase: number): void {
 	s.phaseT = 0;
 	s.leanStartTime = 0;
 	s.startScreen.visible = phase === 0;
+	s.rivalryActive = false; s.rivalryLocked = false; s.rivalryChoice = "";
+	s.circleSymbol.visible = false; s.triangleSymbol.visible = false;
 	if (phase === 0) {
 		s.renderer.toneMappingExposure = 0;
 		s.camera.position.set(0, 0, 0);
 		s.camera.rotation.set(0, 0, 0);
 	} else if (phase === 1) {
 		s.canalScrollOffset = CANAL_NEAR;
+		s.canalMesh.position.set(0, 0, 0);
 		s.renderer.toneMappingExposure = 0.5;
 		s.camera.position.set(0, 0, 0);
 		s.camera.rotation.set(0, 0, 0);
@@ -673,6 +710,7 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 
 	const { pitch, roll } = s.orientation;
 	const { accelerate, brake } = s.speed;
+	let headRoll = 0;
 	let bobX = Math.sin(elapsed * 0.43) * 0.22;
 	let bobY = Math.cos(elapsed * 0.37) * 0.28;
 
@@ -683,7 +721,7 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 		s.postCA += (0.0 - s.postCA) * L;
 		s.startScreen.visible = true;
 
-		if (pitch < -0.2) {
+		if (Math.abs(pitch) > 10) {
 			if (s.leanStartTime === 0) s.leanStartTime = elapsed;
 			else if (elapsed - s.leanStartTime >= 3) {
 				s.startScreen.visible = false;
@@ -693,15 +731,34 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 			s.leanStartTime = 0;
 		}
 	} else if (s.phase === 1) {
-		const pitchFactor = Math.max(-pitch * 2, 0);
-		const forwardSpd = (s.tunnelSpeed * 6 + pitchFactor) * (accelerate ? 1.8 : brake ? 0.3 : 1.0);
-		s.canalScrollOffset -= forwardSpd * delta;
+		// Read head roll BEFORE camera.lookAt() — in XR the quaternion carries headset pose
+		const q = s.camera.quaternion;
+		headRoll = Math.atan2(2 * (q.x * q.y + q.w * q.z), q.w * q.w + q.x * q.x - q.y * q.y - q.z * q.z);
 
-		const xTarget = roll * 2.2;
+		const pitchSpd = Math.min(8, Math.max(-5, pitch * 0.08));
+		const forwardSpd = pitchSpd * (accelerate ? 1.8 : brake ? 0.3 : 1.0);
+		s.canalScrollOffset = Math.max(CANAL_FAR, Math.min(CANAL_NEAR, s.canalScrollOffset - forwardSpd * delta));
+
+		const xTarget = (roll / 90) * 2.6;
 		s.camera.position.x += (xTarget - s.camera.position.x) * delta * 4;
 		s.camera.position.x = Math.min(2.6, Math.max(-2.6, s.camera.position.x));
-		s.camera.position.y = 0;
-		s.camera.position.z = s.canalScrollOffset;
+
+		if (s.renderer.xr.isPresenting) {
+			// XR: move world around fixed camera (Three.js overrides camera.position)
+			s.canalMesh.position.z = -s.canalScrollOffset;
+			s.canalMesh.position.x = -s.camera.position.x;
+			s.camera.position.y = 0;
+			s.camera.position.z = 0;
+			s.exitLight.position.z = CANAL_FAR + s.canalMesh.position.z;
+			s.exitGlow.position.z = CANAL_FAR + s.canalMesh.position.z;
+		} else {
+			// non-XR: move camera through static world
+			s.canalMesh.position.set(0, 0, 0);
+			s.camera.position.y = 0;
+			s.camera.position.z = s.canalScrollOffset;
+			s.exitLight.position.z = CANAL_FAR;
+			s.exitGlow.position.z = CANAL_FAR;
+		}
 		s.camera.lookAt(s.camera.position.x, 0, s.camera.position.z - 50);
 
 		const distToEnd = Math.abs(s.canalScrollOffset - CANAL_FAR);
@@ -718,7 +775,50 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 
 		s.renderer.toneMappingExposure += (1.0 - s.renderer.toneMappingExposure) * delta * 0.5;
 
+		// ── Binocular Rivalry ──
+		const rivalryZone = s.canalScrollOffset <= CANAL_FAR + RIVALRY_START;
+		s.rivalryActive = rivalryZone && !s.rivalryLocked;
+		if (s.rivalryActive) {
+			const distFromEnd = Math.abs(s.canalScrollOffset - CANAL_FAR);
+			const symScale = Math.min(3, Math.max(0.5, 0.4 + (RIVALRY_START - distFromEnd) * 0.018));
+			const symZ = s.camera.position.z - 12;
+			s.circleSymbol.position.set(0, 0, symZ);
+			s.circleSymbol.scale.set(symScale, symScale, 1);
+			s.circleSymbol.visible = true;
+			s.triangleSymbol.position.copy(s.circleSymbol.position);
+			s.triangleSymbol.scale.copy(s.circleSymbol.scale);
+			s.triangleSymbol.visible = true;
+
+			const pulse = 0.6 + 0.4 * Math.sin(elapsed * 3);
+			s.circleGlowU.uPulse.value = pulse;
+			s.triangleGlowU.uPulse.value = pulse;
+
+			if (headRoll < -0.3) {
+				s.rivalryLocked = true;
+				s.rivalryChoice = "left";
+				s.triangleSymbol.visible = false;
+				s.dominantEye = "left";
+			} else if (headRoll > 0.3) {
+				s.rivalryLocked = true;
+				s.rivalryChoice = "right";
+				s.circleSymbol.visible = false;
+				s.dominantEye = "right";
+			}
+		} else if (s.rivalryLocked) {
+			const symZ = s.camera.position.z - 12;
+			s.circleSymbol.position.z = symZ;
+			s.triangleSymbol.position.z = symZ;
+			s.circleSymbol.visible = s.rivalryChoice === "left";
+			s.triangleSymbol.visible = s.rivalryChoice === "right";
+			if (s.rivalryChoice === "left") s.circleGlowU.uPulse.value = 0.6 + 0.4 * Math.sin(elapsed * 3);
+			if (s.rivalryChoice === "right") s.triangleGlowU.uPulse.value = 0.6 + 0.4 * Math.sin(elapsed * 3);
+		} else {
+			s.circleSymbol.visible = false;
+			s.triangleSymbol.visible = false;
+		}
+
 		if (s.canalScrollOffset <= CANAL_FAR) {
+			if (!s.rivalryLocked) s.dominantEye = roll < 0 ? "left" : "right";
 			applyPhase(s, 2);
 		}
 	} else if (s.phase >= 2 && s.phase <= 4) {
@@ -797,15 +897,21 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 		s.openDoor.lookAt(s.camera.position);
 	}
 
-	if (showExit) {
+	const showRivalry = s.rivalryActive || s.rivalryLocked;
+	if (showRivalry || showExit) {
 		if (s.renderer.xr.isPresenting) {
 			const xrCam = s.renderer.xr.getCamera() as THREE.ArrayCamera;
 			if (xrCam.cameras && xrCam.cameras.length === 2) {
 				const left = xrCam.cameras[0], right = xrCam.cameras[1];
-				let layerLeft = showExit && s.dominantEye === "right" ? 2 : 1;
-				let layerRight = showExit && s.dominantEye === "left" ? 1 : 2;
-				left.layers.enable(0); left.layers.enable(layerLeft); left.layers.disable(layerRight);
-				right.layers.enable(0); right.layers.disable(layerLeft); right.layers.enable(layerRight);
+				if (showRivalry) {
+					left.layers.enable(0); left.layers.enable(1); left.layers.disable(2);
+					right.layers.enable(0); right.layers.disable(1); right.layers.enable(2);
+				} else {
+					const layerLeft = s.dominantEye === "right" ? 2 : 1;
+					const layerRight = s.dominantEye === "left" ? 1 : 2;
+					left.layers.enable(0); left.layers.enable(layerLeft); left.layers.disable(layerRight);
+					right.layers.enable(0); right.layers.disable(layerLeft); right.layers.enable(layerRight);
+				}
 			}
 		} else { s.camera.layers.enableAll(); }
 	} else if (!s.renderer.xr.isPresenting) { s.camera.layers.enable(0); }
@@ -836,6 +942,23 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 			pa[i * 3] = s.gpSamp[i].x; pa[i * 3 + 1] = s.gpSamp[i].y; pa[i * 3 + 2] = s.gpSamp[i].z + s.camZ;
 		}
 		s.gpGeo.attributes.position.needsUpdate = true;
+	}
+
+	// ── Debug overlay ──
+	{
+		s.debugOverlay.position.set(s.camera.position.x - 4, s.camera.position.y + 3, s.camera.position.z - 6);
+		const cx = s.debugCanvas.getContext("2d")!;
+		const w = s.debugCanvas.width, h = s.debugCanvas.height;
+		cx.clearRect(0, 0, w, h);
+		cx.fillStyle = "#ffffff";
+		cx.font = "bold 24px monospace";
+		const lines = [
+			`phase:${s.phase}  scrollOff:${s.canalScrollOffset.toFixed(1)}  camZ:${s.camera.position.z.toFixed(1)}`,
+			`canalZ:${s.canalMesh.position.z.toFixed(1)}  pitch:${(s.orientation.pitch).toFixed(2)}  roll:${(s.orientation.roll).toFixed(2)}`,
+			`rivalry:${s.rivalryActive?"A":""}${s.rivalryLocked?"L":""}  lock:${s.rivalryChoice||"-"}  hRoll:${headRoll.toFixed(2)}`,
+		];
+		lines.forEach((t, i) => { cx.fillText(t, 10, 40 + i * 40); });
+		s.debugTexture.needsUpdate = true;
 	}
 
 	const showThreats = s.phase >= 2 && s.phase <= 3;
