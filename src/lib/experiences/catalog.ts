@@ -5,6 +5,7 @@ import { manifest as b4Lesser } from "./b4-lesser";
 import { manifest as b5Lesser } from "./b5-lesser";
 import { manifest as b5dotLesser } from "./b5.lesser";
 import { manifest as b6Lesser } from "./b6-lesser";
+import { manifest as biometricTest } from "./biometric-test";
 import { manifest as bLesser } from "./b-lesser/manifest";
 import { manifest as cloudTowers } from "./cloud-towers";
 import { manifest as gradientPrism } from "./gradient-prism";
@@ -28,6 +29,7 @@ const CATALOG: Record<string, ExperienceManifest> = {
 	"b5-lesser": b5Lesser,
 	"b5.lesser": b5dotLesser,
 	"b6-lesser": b6Lesser,
+	"biometric-test": biometricTest,
 	"b-lesser": bLesser,
 	"cloud-towers": cloudTowers,
 	"gradient-prism": gradientPrism,

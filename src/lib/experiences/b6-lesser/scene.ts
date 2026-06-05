@@ -302,19 +302,64 @@ export interface B5LesserState extends ExperienceState {
 	leanStartTime: number;
 	exitLight: THREE.PointLight;
 	exitGlow: THREE.Mesh;
-	rivalryActive: boolean;
-	rivalryLocked: boolean;
-	rivalryChoice: "left" | "right" | "";
-	rivalryDist: number;
-	debugCanvas: HTMLCanvasElement;
-	debugTexture: THREE.CanvasTexture;
-	debugOverlay: THREE.Sprite;
+	biometricTrap: THREE.Group;
+	endLight: THREE.PointLight;
+	endGlow: THREE.Mesh;
 }
 
 const TUNNEL_R = 6.4; const TUNNEL_LEN = 320; const CAGE_R = 16; const CAGE_LEN = 400; const GP_N = 850;
 const CANAL_RADIUS = 3.5; const CANAL_LENGTH = 700; const CANAL_NEAR = 10; const CANAL_FAR = 10 - CANAL_LENGTH;
 const CANAL_RAD_SEG = 32; const CANAL_Z_SEG = 100;
-const RIVALRY_START = 150;
+
+function buildVRBiometricTrap(camera: THREE.PerspectiveCamera): THREE.Group {
+	const group = new THREE.Group();
+
+	const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+	ambientLight.layers.enable(1);
+	ambientLight.layers.enable(2);
+	group.add(ambientLight);
+
+	const pointLight = new THREE.PointLight(0xffffff, 2.0);
+	pointLight.position.set(0, 2, -1);
+	pointLight.layers.enable(1);
+	pointLight.layers.enable(2);
+	group.add(pointLight);
+
+	const leftGeo = new THREE.TorusGeometry(0.15, 0.04, 16, 64);
+	const leftMat = new THREE.MeshStandardMaterial({
+		color: 0xffaa00,
+		emissive: 0x885500,
+		metalness: 0.8,
+		roughness: 0.1,
+		transparent: true,
+		opacity: 0,
+	});
+	const leftMesh = new THREE.Mesh(leftGeo, leftMat);
+	leftMesh.position.set(0, 0, -2);
+	leftMesh.layers.set(1);
+	leftMesh.name = "leftEyeCircle";
+	group.add(leftMesh);
+
+	const rightGeo = new THREE.TetrahedronGeometry(0.2);
+	const rightMat = new THREE.MeshStandardMaterial({
+		color: 0x00ffff,
+		emissive: 0x008888,
+		metalness: 0.8,
+		roughness: 0.1,
+		transparent: true,
+		opacity: 0,
+	});
+	const rightMesh = new THREE.Mesh(rightGeo, rightMat);
+	rightMesh.position.set(0, 0, -2);
+	rightMesh.layers.set(2);
+	rightMesh.name = "rightEyeTriangle";
+	group.add(rightMesh);
+
+	camera.layers.enable(1);
+	camera.layers.enable(2);
+
+	return group;
+}
 
 export async function setup(ctx: SetupContext): Promise<B5LesserState> {
 	const { scene, renderer } = ctx;
@@ -582,18 +627,24 @@ export async function setup(ctx: SetupContext): Promise<B5LesserState> {
 	exitGlow.visible = false;
 	scene.add(exitGlow);
 
-	const debugCanvas = document.createElement("canvas");
-	debugCanvas.width = 512; debugCanvas.height = 256;
-	debugCanvas.getContext("2d")!.fillStyle = "#ffffff";
-	const debugTexture = new THREE.CanvasTexture(debugCanvas);
-	const debugOverlay = new THREE.Sprite(new THREE.SpriteMaterial({ map: debugTexture, transparent: true, depthWrite: false, depthTest: false }));
-	debugOverlay.position.set(-4, 3, -6);
-	debugOverlay.scale.set(8, 4, 1);
-	scene.add(debugOverlay);
+	const biometricTrap = buildVRBiometricTrap(camera);
+	biometricTrap.visible = false;
+	scene.add(biometricTrap);
+
+	const endLight = new THREE.PointLight(0x8800ff, 0, 40);
+	endLight.visible = false;
+	scene.add(endLight);
+
+	const endGlow = new THREE.Mesh(
+		new THREE.SphereGeometry(5, 16, 12),
+		new THREE.MeshBasicMaterial({ color: 0x8800ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+	);
+	endGlow.visible = false;
+	scene.add(endGlow);
 
 	const state: B5LesserState = {
 		scene, renderer, camera, phase: 0, phaseT: 0, camZ: -2, camPos: new THREE.Vector3(0, 0, -2), heading: 0, lateralX: 0, currentSpeed: 0,
-		delayedPitch: 0, delayedRoll: 0, tunnelSpeed: 0.28, baseSpeed: 5, phaseDuration: 35, bendSpeed: 0.005,
+		delayedPitch: 0, delayedRoll: 0, tunnelSpeed: 0.028, baseSpeed: 5, phaseDuration: 35, bendSpeed: 0.005,
 		orientation: { pitch: 0, roll: 0 }, speed: { accelerate: false, brake: false }, dominantEye: null,
 		postfxComposer: composer, postfxRender, blesserEffect, postfxDeltaRef, postCA: 0.0, postWarp: 0, postFlick: 0, hbPulse: 0, tunnelReveal: 0,
 		tunnelMesh, tunnelU, tunnelLight, tunnelHalo, tunnelHaloU,
@@ -601,30 +652,13 @@ export async function setup(ctx: SetupContext): Promise<B5LesserState> {
 		tunnelParticles, tunnelParticleMat, tunnelFog, tunnelFogMat,
 		canalMesh, canalMat, canalScrollOffset: 0,
 		circleSymbol, triangleSymbol, circleGlowU, triangleGlowU, closedDoor, openDoor,
-		cageMesh, cageU, stars, nebula, trails, trailSc: 1, gpMesh, gpGeo, gpSamp, threats, threatGlowU, _onResize, startScreen, leanStartTime: 0, exitLight, exitGlow,
-		rivalryActive: false, rivalryLocked: false, rivalryChoice: "", rivalryDist: 0, debugCanvas, debugTexture, debugOverlay,
+		cageMesh, cageU, stars, nebula, trails, trailSc: 1, gpMesh, gpGeo, gpSamp, threats, threatGlowU, _onResize, startScreen, leanStartTime: 0, exitLight, exitGlow, biometricTrap, endLight, endGlow,
 	};
-
-	applyPhase(state, 1);
 
 	keyHandler = (e: KeyboardEvent): void => {
 		const k = e.key;
 		const num = k.length === 1 ? parseInt(k) : parseInt(k.replace("Numpad", ""));
 		if (!isNaN(num) && num >= 0 && num <= 5) applyPhase(state, num);
-		if (k === "r" || k === "R") {
-			applyPhase(state, 1);
-			state.canalScrollOffset = CANAL_FAR + RIVALRY_START - 20;
-		}
-		if (k === "y" || k === "Y") {
-			// Force-show rivalry symbols for testing
-			const S = state as B5LesserState;
-			if (S.phase === 1) {
-				S.rivalryActive = true;
-				S.rivalryLocked = false;
-				S.circleSymbol.visible = true;
-				S.triangleSymbol.visible = true;
-			}
-		}
 	};
 	document.addEventListener("keydown", keyHandler);
 
@@ -636,15 +670,12 @@ export function applyPhase(s: B5LesserState, phase: number): void {
 	s.phaseT = 0;
 	s.leanStartTime = 0;
 	s.startScreen.visible = phase === 0;
-	s.rivalryActive = false; s.rivalryLocked = false; s.rivalryChoice = "";
-	s.circleSymbol.visible = false; s.triangleSymbol.visible = false;
 	if (phase === 0) {
 		s.renderer.toneMappingExposure = 0;
 		s.camera.position.set(0, 0, 0);
 		s.camera.rotation.set(0, 0, 0);
 	} else if (phase === 1) {
 		s.canalScrollOffset = CANAL_NEAR;
-		s.canalMesh.position.set(0, 0, 0);
 		s.renderer.toneMappingExposure = 0.5;
 		s.camera.position.set(0, 0, 0);
 		s.camera.rotation.set(0, 0, 0);
@@ -710,7 +741,6 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 
 	const { pitch, roll } = s.orientation;
 	const { accelerate, brake } = s.speed;
-	let headRoll = 0;
 	let bobX = Math.sin(elapsed * 0.43) * 0.22;
 	let bobY = Math.cos(elapsed * 0.37) * 0.28;
 
@@ -721,7 +751,7 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 		s.postCA += (0.0 - s.postCA) * L;
 		s.startScreen.visible = true;
 
-		if (Math.abs(pitch) > 10) {
+		if (pitch < -0.2) {
 			if (s.leanStartTime === 0) s.leanStartTime = elapsed;
 			else if (elapsed - s.leanStartTime >= 3) {
 				s.startScreen.visible = false;
@@ -731,34 +761,15 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 			s.leanStartTime = 0;
 		}
 	} else if (s.phase === 1) {
-		// Read head roll BEFORE camera.lookAt() — in XR the quaternion carries headset pose
-		const q = s.camera.quaternion;
-		headRoll = Math.atan2(2 * (q.x * q.y + q.w * q.z), q.w * q.w + q.x * q.x - q.y * q.y - q.z * q.z);
+		const pitchFactor = Math.max(-pitch * 2, 0);
+		const forwardSpd = (s.tunnelSpeed * 6 + pitchFactor) * (accelerate ? 1.8 : brake ? 0.3 : 1.0);
+		s.canalScrollOffset -= forwardSpd * delta;
 
-		const pitchSpd = Math.min(8, Math.max(-5, pitch * 0.08));
-		const forwardSpd = pitchSpd * (accelerate ? 1.8 : brake ? 0.3 : 1.0);
-		s.canalScrollOffset = Math.max(CANAL_FAR, Math.min(CANAL_NEAR, s.canalScrollOffset - forwardSpd * delta));
-
-		const xTarget = (roll / 90) * 2.6;
+		const xTarget = roll * 2.2;
 		s.camera.position.x += (xTarget - s.camera.position.x) * delta * 4;
 		s.camera.position.x = Math.min(2.6, Math.max(-2.6, s.camera.position.x));
-
-		if (s.renderer.xr.isPresenting) {
-			// XR: move world around fixed camera (Three.js overrides camera.position)
-			s.canalMesh.position.z = -s.canalScrollOffset;
-			s.canalMesh.position.x = -s.camera.position.x;
-			s.camera.position.y = 0;
-			s.camera.position.z = 0;
-			s.exitLight.position.z = CANAL_FAR + s.canalMesh.position.z;
-			s.exitGlow.position.z = CANAL_FAR + s.canalMesh.position.z;
-		} else {
-			// non-XR: move camera through static world
-			s.canalMesh.position.set(0, 0, 0);
-			s.camera.position.y = 0;
-			s.camera.position.z = s.canalScrollOffset;
-			s.exitLight.position.z = CANAL_FAR;
-			s.exitGlow.position.z = CANAL_FAR;
-		}
+		s.camera.position.y = 0;
+		s.camera.position.z = s.canalScrollOffset;
 		s.camera.lookAt(s.camera.position.x, 0, s.camera.position.z - 50);
 
 		const distToEnd = Math.abs(s.canalScrollOffset - CANAL_FAR);
@@ -775,50 +786,7 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 
 		s.renderer.toneMappingExposure += (1.0 - s.renderer.toneMappingExposure) * delta * 0.5;
 
-		// ── Binocular Rivalry ──
-		const rivalryZone = s.canalScrollOffset <= CANAL_FAR + RIVALRY_START;
-		s.rivalryActive = rivalryZone && !s.rivalryLocked;
-		if (s.rivalryActive) {
-			const distFromEnd = Math.abs(s.canalScrollOffset - CANAL_FAR);
-			const symScale = Math.min(3, Math.max(0.5, 0.4 + (RIVALRY_START - distFromEnd) * 0.018));
-			const symZ = s.camera.position.z - 12;
-			s.circleSymbol.position.set(0, 0, symZ);
-			s.circleSymbol.scale.set(symScale, symScale, 1);
-			s.circleSymbol.visible = true;
-			s.triangleSymbol.position.copy(s.circleSymbol.position);
-			s.triangleSymbol.scale.copy(s.circleSymbol.scale);
-			s.triangleSymbol.visible = true;
-
-			const pulse = 0.6 + 0.4 * Math.sin(elapsed * 3);
-			s.circleGlowU.uPulse.value = pulse;
-			s.triangleGlowU.uPulse.value = pulse;
-
-			if (headRoll < -0.3) {
-				s.rivalryLocked = true;
-				s.rivalryChoice = "left";
-				s.triangleSymbol.visible = false;
-				s.dominantEye = "left";
-			} else if (headRoll > 0.3) {
-				s.rivalryLocked = true;
-				s.rivalryChoice = "right";
-				s.circleSymbol.visible = false;
-				s.dominantEye = "right";
-			}
-		} else if (s.rivalryLocked) {
-			const symZ = s.camera.position.z - 12;
-			s.circleSymbol.position.z = symZ;
-			s.triangleSymbol.position.z = symZ;
-			s.circleSymbol.visible = s.rivalryChoice === "left";
-			s.triangleSymbol.visible = s.rivalryChoice === "right";
-			if (s.rivalryChoice === "left") s.circleGlowU.uPulse.value = 0.6 + 0.4 * Math.sin(elapsed * 3);
-			if (s.rivalryChoice === "right") s.triangleGlowU.uPulse.value = 0.6 + 0.4 * Math.sin(elapsed * 3);
-		} else {
-			s.circleSymbol.visible = false;
-			s.triangleSymbol.visible = false;
-		}
-
 		if (s.canalScrollOffset <= CANAL_FAR) {
-			if (!s.rivalryLocked) s.dominantEye = roll < 0 ? "left" : "right";
 			applyPhase(s, 2);
 		}
 	} else if (s.phase >= 2 && s.phase <= 4) {
@@ -887,6 +855,20 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 
 	const showExit = s.phase === 5 && s.tunnelProgress > 0.85;
 	s.closedDoor.visible = showExit; s.openDoor.visible = showExit;
+	s.endLight.visible = showExit; s.endGlow.visible = showExit;
+	if (showExit) {
+		const endPos = s.tunnelCurve.getPointAt(0.999);
+		const endT = s.tunnelCurve.getTangentAt(0.999);
+		const lightPos = endPos.clone().addScaledVector(endT, 6.0);
+		s.endLight.position.copy(lightPos);
+		s.endGlow.position.copy(lightPos);
+		const hue = (elapsed * 0.08) % 1;
+		const col = new THREE.Color().setHSL(hue, 1, 0.5);
+		s.endLight.color.copy(col);
+		s.endLight.intensity = 8 + Math.sin(elapsed * 3) * 3;
+		s.endGlow.material.color.copy(col);
+		(s.endGlow.material as THREE.MeshBasicMaterial).opacity = 0.3 + Math.sin(elapsed * 2) * 0.2;
+	}
 	if (showExit) {
 		const endPos = s.tunnelCurve.getPointAt(0.999);
 		const endT = s.tunnelCurve.getTangentAt(0.999);
@@ -897,24 +879,53 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 		s.openDoor.lookAt(s.camera.position);
 	}
 
-	const showRivalry = s.rivalryActive || s.rivalryLocked;
-	if (showRivalry || showExit) {
+	if (showExit) {
 		if (s.renderer.xr.isPresenting) {
 			const xrCam = s.renderer.xr.getCamera() as THREE.ArrayCamera;
 			if (xrCam.cameras && xrCam.cameras.length === 2) {
 				const left = xrCam.cameras[0], right = xrCam.cameras[1];
-				if (showRivalry) {
-					left.layers.enable(0); left.layers.enable(1); left.layers.disable(2);
-					right.layers.enable(0); right.layers.disable(1); right.layers.enable(2);
-				} else {
-					const layerLeft = s.dominantEye === "right" ? 2 : 1;
-					const layerRight = s.dominantEye === "left" ? 1 : 2;
-					left.layers.enable(0); left.layers.enable(layerLeft); left.layers.disable(layerRight);
-					right.layers.enable(0); right.layers.disable(layerLeft); right.layers.enable(layerRight);
-				}
+				let layerLeft = showExit && s.dominantEye === "right" ? 2 : 1;
+				let layerRight = showExit && s.dominantEye === "left" ? 1 : 2;
+				left.layers.enable(0); left.layers.enable(layerLeft); left.layers.disable(layerRight);
+				right.layers.enable(0); right.layers.disable(layerLeft); right.layers.enable(layerRight);
 			}
 		} else { s.camera.layers.enableAll(); }
 	} else if (!s.renderer.xr.isPresenting) { s.camera.layers.enable(0); }
+
+	const showBiometricTrap = s.phase >= 2 && s.phase <= 4;
+	s.biometricTrap.visible = showBiometricTrap;
+	if (showBiometricTrap && !s.renderer.xr.isPresenting) {
+		s.camera.layers.enable(1);
+		s.camera.layers.enable(2);
+	}
+
+	if (showBiometricTrap) {
+		const circleMesh = s.biometricTrap.getObjectByName("leftEyeCircle") as THREE.Mesh | null;
+		const triangleMesh = s.biometricTrap.getObjectByName("rightEyeTriangle") as THREE.Mesh | null;
+
+		const shapeT = Math.min(1.0, (s.phaseT - 5.0) / 4.0);
+		const pulse = 0.9 + 0.1 * Math.sin(elapsed * 2.5);
+		const baseScale = 0.2 + shapeT * 0.8;
+		const baseOpacity = shapeT * 0.85;
+
+		if (circleMesh) {
+			const matM = circleMesh.material as THREE.MeshStandardMaterial;
+			matM.opacity = Math.min(1, baseOpacity);
+			circleMesh.scale.setScalar(baseScale * pulse);
+			circleMesh.rotation.x = elapsed * 0.5;
+			circleMesh.rotation.y = elapsed * 0.7;
+			circleMesh.position.y = Math.sin(elapsed * 2.0) * 0.05;
+		}
+
+		if (triangleMesh) {
+			const matM = triangleMesh.material as THREE.MeshStandardMaterial;
+			matM.opacity = Math.min(1, baseOpacity);
+			triangleMesh.scale.setScalar(baseScale * pulse);
+			triangleMesh.rotation.x = elapsed * 0.5;
+			triangleMesh.rotation.y = elapsed * 0.7;
+			triangleMesh.position.y = Math.sin(elapsed * 2.0) * 0.05;
+		}
+	}
 
 	const showCage = s.phase >= 2 && s.phase <= 4;
 	s.cageMesh.visible = showCage; s.stars.visible = showCage; s.nebula.visible = showCage;
@@ -942,23 +953,6 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 			pa[i * 3] = s.gpSamp[i].x; pa[i * 3 + 1] = s.gpSamp[i].y; pa[i * 3 + 2] = s.gpSamp[i].z + s.camZ;
 		}
 		s.gpGeo.attributes.position.needsUpdate = true;
-	}
-
-	// ── Debug overlay ──
-	{
-		s.debugOverlay.position.set(s.camera.position.x - 4, s.camera.position.y + 3, s.camera.position.z - 6);
-		const cx = s.debugCanvas.getContext("2d")!;
-		const w = s.debugCanvas.width, h = s.debugCanvas.height;
-		cx.clearRect(0, 0, w, h);
-		cx.fillStyle = "#ffffff";
-		cx.font = "bold 24px monospace";
-		const lines = [
-			`phase:${s.phase}  scrollOff:${s.canalScrollOffset.toFixed(1)}  camZ:${s.camera.position.z.toFixed(1)}`,
-			`canalZ:${s.canalMesh.position.z.toFixed(1)}  pitch:${(s.orientation.pitch).toFixed(2)}  roll:${(s.orientation.roll).toFixed(2)}`,
-			`rivalry:${s.rivalryActive?"A":""}${s.rivalryLocked?"L":""}  lock:${s.rivalryChoice||"-"}  hRoll:${headRoll.toFixed(2)}`,
-		];
-		lines.forEach((t, i) => { cx.fillText(t, 10, 40 + i * 40); });
-		s.debugTexture.needsUpdate = true;
 	}
 
 	const showThreats = s.phase >= 2 && s.phase <= 3;
@@ -990,6 +984,13 @@ export function dispose(state: ExperienceState, scene: THREE.Scene): void {
 	scene.remove(s.tunnelLight); s.tunnelLight.dispose();
 	scene.remove(s.exitLight); s.exitLight.dispose();
 	s.exitGlow.geometry.dispose(); (s.exitGlow.material as THREE.Material).dispose(); scene.remove(s.exitGlow);
+	scene.remove(s.endLight); s.endLight.dispose();
+	s.endGlow.geometry.dispose(); (s.endGlow.material as THREE.Material).dispose(); scene.remove(s.endGlow);
+
+	s.biometricTrap.children.forEach(child => {
+		if (child instanceof THREE.Mesh) { child.geometry.dispose(); (child.material as THREE.Material).dispose(); }
+	});
+	scene.remove(s.biometricTrap);
 
 	for (const child of [...scene.children]) {
 		if (child instanceof THREE.AmbientLight) scene.remove(child);
