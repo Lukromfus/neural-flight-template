@@ -68,7 +68,7 @@ const parameters: ParameterDef[] = [
 
 export const manifest: ExperienceManifest = {
 	// ── Identity ────────────────────────────────────────────────────
-	id: "b-lesser",
+	id: "llf_b-lesser",
 	name: "B.LESSER",
 	description:
 		"A synthetic rebirth. Three phases: Extraction → Blessed → Bend.",

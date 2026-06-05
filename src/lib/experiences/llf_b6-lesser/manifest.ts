@@ -8,9 +8,9 @@ const parameters: ParameterDef[] = [
 		id: "tunnelSpeed",
 		label: "Tunnel Speed",
 		group: "Pacing",
-		min: 0.05,
+		min: 0.01,
 		max: 1.2,
-		default: 0.28,
+		default: 0.028,
 		step: 0.05,
 		unit: "u/s",
 		icon: "Gauge",
@@ -60,10 +60,10 @@ const parameters: ParameterDef[] = [
 ];
 
 export const manifest: ExperienceManifest = {
-	id: "b5.lesser",
-	name: "B5.LESSER",
+	id: "llf_b6-lesser",
+	name: "B6.LESSER",
 	description:
-		"Return through the tube. Six phases: Entry → Tube → Space → Bend → Climax → Exit.",
+		"A copy of B5.LESSER — Return through the tube. Six phases: Entry → Tube → Space → Bend → Climax → Exit.",
 	version: "0.1.0",
 	author: "B.lesser",
 

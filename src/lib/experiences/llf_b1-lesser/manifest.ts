@@ -13,25 +13,15 @@ const parameters: ParameterDef[] = [
 		unit: "m/s",
 		icon: "Gauge",
 	},
-	{
-		id: "steerSensitivity",
-		label: "Controller Sensitivity",
-		group: "Controls",
-		min: 0,
-		max: 0.5,
-		default: 0.08,
-		step: 0.01,
-		icon: "Crosshair",
-	},
 ];
 
 export const manifest: ExperienceManifest = {
-	id: "b3-lesser",
-	name: "b3.lesser",
+	id: "llf_b1-lesser",
+	name: "b1.lesser",
 	description:
-		"Infinite dune canyon — endless Moebius desert with scrolling terrain, glowing crystals and flying orbs.",
+		"Geometric tube experience — abstract tunnel with pitch-controlled movement.",
 	version: "0.1.0",
-	author: "LULULIFU",
+	author: "LUFULI",
 
 	parameters,
 	interfaces: { orientation: true, speed: false },

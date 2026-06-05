@@ -60,7 +60,7 @@ const parameters: ParameterDef[] = [
 ];
 
 export const manifest: ExperienceManifest = {
-	id: "b5-lesser",
+	id: "llf_b5-lesser",
 	name: "B5.LESSER",
 	description:
 		"Return through the tube. Six phases: Entry → Tube → Space → Bend → Climax → Exit.",

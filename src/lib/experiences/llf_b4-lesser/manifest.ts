@@ -68,7 +68,7 @@ const parameters: ParameterDef[] = [
 
 export const manifest: ExperienceManifest = {
 	// ── Identity ────────────────────────────────────────────────────
-	id: "b4-lesser",
+	id: "llf_b4-lesser",
 	name: "B4.LESSER",
 	description:
 		"Cosmic rebirth variant. Enhanced peristalsis and layered nebula tunnel.",

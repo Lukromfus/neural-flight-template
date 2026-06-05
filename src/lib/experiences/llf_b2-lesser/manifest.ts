@@ -26,7 +26,7 @@ const parameters: ParameterDef[] = [
 ];
 
 export const manifest: ExperienceManifest = {
-	id: "b2-lesser",
+	id: "llf_b2-lesser",
 	name: "b2.lesser",
 	description:
 		"Dune canyon experience — Moebius desert with glowing crystals and flying orbs.",
