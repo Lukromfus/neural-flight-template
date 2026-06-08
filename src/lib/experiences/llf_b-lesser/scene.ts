@@ -588,7 +588,8 @@ export function tick(state: ExperienceState, ctx: TickContext): { state: Experie
 
 		if (s.tunnelProgress >= 1) {
 			s.dominantEye = lateral < 0 ? "left" : "right";
-			s.phase = 1; s.phaseT = 0; s.camPos.copy(s.camera.position);
+			(s as any)._navigateTo = "llf_b66-lesser";
+			return { state: s };
 		}
 	} else if (s.phase >= 1 && s.phase <= 4) {
 		const DEG2RAD = Math.PI / 180;

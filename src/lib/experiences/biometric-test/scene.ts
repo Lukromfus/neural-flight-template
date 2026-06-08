@@ -674,7 +674,7 @@ export async function setup(ctx: SetupContext): Promise<BiometricTestState> {
   renderer.xr.addEventListener("sessionstart", () => {
     const session = renderer.xr.getSession();
     if (session) {
-      session.addEventListener("select", (event: XRSessionEvent) => {
+      session.addEventListener("select", (event: XRInputSourceEvent) => {
         if (event.inputSource?.handedness === "right" && stateRef) {
           stateRef.phase = stateRef.phase === 0 ? 1 : 0;
         }
