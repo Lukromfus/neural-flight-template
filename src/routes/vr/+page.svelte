@@ -31,6 +31,10 @@ let lastOrientation = { pitch: 0, roll: 0 };
 let lastSpeed = { accelerate: false, brake: false };
 let removeResizeListener: (() => void) | null = null;
 
+let exp: ActiveExperience | null = null;
+let renderCamera: THREE.PerspectiveCamera | null = null;
+let isNavigating = false;
+
 onMount(() => {
 	scene = new THREE.Scene();
 	const dummyCamera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
@@ -45,25 +49,28 @@ onMount(() => {
 	vrButton = VRButton.createButton(renderer);
 	document.body.appendChild(vrButton);
 
+	const onResize = (): void => {
+		if (!renderCamera) return;
+		renderCamera.aspect = window.innerWidth / window.innerHeight;
+		renderCamera.updateProjectionMatrix();
+		renderer.setSize(window.innerWidth, window.innerHeight);
+	};
+	window.addEventListener("resize", onResize);
+	removeResizeListener = () => window.removeEventListener("resize", onResize);
+
 	// Load whichever experience is selected (persisted in localStorage)
 	const experienceId = getActiveExperienceId();
 
 	loadExperience(experienceId, { scene, camera: dummyCamera, renderer }).then(
-		(exp: ActiveExperience) => {
+		(loadedExp: ActiveExperience) => {
+			exp = loadedExp;
+			renderCamera = exp.state.camera as THREE.PerspectiveCamera;
 			experienceName = exp.manifest.name;
 			hasOutputs = (exp.manifest.outputs?.length ?? 0) > 0;
-			const renderCamera = exp.state.camera as THREE.PerspectiveCamera;
-
-			function onResize(): void {
-				renderCamera.aspect = window.innerWidth / window.innerHeight;
-				renderCamera.updateProjectionMatrix();
-				renderer.setSize(window.innerWidth, window.innerHeight);
-			}
-			window.addEventListener("resize", onResize);
-			removeResizeListener = () =>
-				window.removeEventListener("resize", onResize);
 
 			renderer.setAnimationLoop(() => {
+				if (isNavigating || !exp || !renderCamera) return;
+
 				const delta = clock.getDelta();
 
 				const msg = ws.lastMessage;
@@ -100,6 +107,25 @@ onMount(() => {
 					playerRotation: renderCamera.parent?.rotation ?? new THREE.Euler(),
 				});
 				exp.state = result.state;
+
+				// ── Cross-experience navigation ──
+				const navTarget = (exp.state as any)._navigateTo as string | undefined;
+				if (navTarget) {
+					isNavigating = true;
+					delete (exp.state as any)._navigateTo;
+					unloadExperience(scene);
+					loadExperience(navTarget, { scene, camera: dummyCamera, renderer }).then((newExp: ActiveExperience) => {
+						exp = newExp;
+						renderCamera = newExp.state.camera as THREE.PerspectiveCamera;
+						renderCamera.aspect = window.innerWidth / window.innerHeight;
+						renderCamera.updateProjectionMatrix();
+						experienceName = newExp.manifest.name;
+						hasOutputs = (newExp.manifest.outputs?.length ?? 0) > 0;
+						isNavigating = false;
+					});
+					return;
+				}
+
 				if (result.outputs?.score !== undefined) {
 					score = result.outputs.score as number;
 				}
