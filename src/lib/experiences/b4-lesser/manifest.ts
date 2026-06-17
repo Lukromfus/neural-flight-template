@@ -68,7 +68,7 @@ const parameters: ParameterDef[] = [
 
 export const manifest: ExperienceManifest = {
 	// ── Identity ────────────────────────────────────────────────────
-	id: "llf_b4-lesser",
+	id: "b4-lesser",
 	name: "B4.LESSER",
 	description:
 		"Canal → suction → dark room with doors.",

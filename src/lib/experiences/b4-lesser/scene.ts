@@ -1089,34 +1089,71 @@ for (const fog of s.tunnelFog) fog.visible = showTunnel;
                 left.layers.enable(0); left.layers.enable(1); left.layers.disable(2);
                 right.layers.enable(0); right.layers.disable(1); right.layers.enable(2);
             }
-        } else { s.camera.layers.enableAll(); }
-    } else if (!s.renderer.xr.isPresenting) { s.camera.layers.enable(0); }
-
-const showCage = false;
-const showStars = s.phase === 1; 
-s.cageMesh.visible = showCage; 
-s.stars.visible = showStars; 
-s.nebula.visible = showStars;
-    if (showCage) {
-        s.cageMesh.position.set(0, 0, s.camZ - 80); s.cageU.uTime.value = elapsed;
+        } else { 
+            s.camera.layers.enableAll(); 
+        }
+    } else if (!s.renderer.xr.isPresenting) { 
+        s.camera.layers.enable(0); 
     }
+
+    // 2. Set Visibility Flags
+    const showCage = false;
+    const showStars = s.phase === 1; // Note: if you want stars in phase 2, change this to (s.phase === 1 || s.phase === 2)
+    const showTrails = false;
+    const showThreats = false;
+
+    s.cageMesh.visible = showCage; 
+    s.stars.visible = showStars; 
+    s.nebula.visible = showStars;
+
+    // 3. Animate the fish-eye warp to breathe slightly
+    if (s.phase === 1 || s.phase === 2) {
+        s.postWarp = 0.52 + Math.sin(elapsed * 0.72) * 0.2;
+        if (s.blesserEffect) s.blesserEffect.setWarp(s.postWarp);
+    }
+
+    // 4. Update Stars & Nebula (Only run math if they are actually visible!)
     if (showStars) {
         s.stars.position.set(0, 0, 0); 
         s.nebula.position.set(0, 0, 0);
+        
+        // Update Time Uniforms safely
         (s.stars.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
         (s.nebula.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
+
+        // Move stars toward the camera to simulate "pulling inside"
+        const speed = 120 * delta; 
+        const CAGE_LEN = 400; // Match your starfield generation length
+
+        [s.stars, s.nebula].forEach(mesh => {
+            const positions = mesh.geometry.attributes.position.array;
+            for(let i = 0; i < positions.length / 3; i++) {
+                positions[i * 3 + 2] += speed; 
+                // If a star passes behind the camera, wrap it back to the deep background
+                if (positions[i * 3 + 2] > 10) {
+                    positions[i * 3 + 2] -= CAGE_LEN;
+                }
+            }
+            mesh.geometry.attributes.position.needsUpdate = true;
+        });
     }
 
+    // 5. Update Cage
+    if (showCage) {
+        s.cageMesh.position.set(0, 0, s.camZ - 80); 
+        s.cageU.uTime.value = elapsed;
+    }
+
+    // 6. Update Trails
     const trailScTarget = 1.0;
-    s.trailSc += (trailScTarget - s.trailSc) * L;
-    const showTrails = false;
+    s.trailSc += (trailScTarget - s.trailSc) * L; // Ensure 'L' is defined in your wider scope
     for (const tr of s.trails) {
         if (showTrails) tr.update(elapsed, s.camZ, true, s.trailSc);
         else tr.hide();
     }
 
-const showThreats = false;
-s.threats.forEach((t, i) => {
+    // 7. Update Threats
+    s.threats.forEach((t, i) => {
         t.visible = showThreats;
         if (showThreats) {
             const d = t.userData as { spd: number; rad: number; ph: number; off: number };
@@ -1124,7 +1161,7 @@ s.threats.forEach((t, i) => {
             t.position.set(Math.cos(a) * d.rad, Math.sin(a * 1.38) * d.rad * 0.75, s.camZ + d.off);
             s.threatGlowU[i].uPulse.value = 0.7 + Math.sin(elapsed * 3.5 + i) * 0.35;
         }
-});
+    });
 
 // ── Room + doors (Phase 2) ─────────────────────────────────────
 const showRoom = s.phase === 2 || s.phase === 3;
